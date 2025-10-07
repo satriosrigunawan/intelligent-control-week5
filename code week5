@@ -1,0 +1,75 @@
+import cv2
+import mediapipe as mp
+
+# Inisialisasi modul MediaPipe Hands
+mp_drawing = mp.solutions.drawing_utils
+mp_hands = mp.solutions.hands
+
+# Konfigurasi: deteksi maksimal 2 tangan, tingkat kepercayaan tinggi
+hands = mp_hands.Hands(
+    static_image_mode=False,
+    max_num_hands=2,
+    min_detection_confidence=0.7,
+    min_tracking_confidence=0.5
+)
+
+# Buka kamera
+cap = cv2.VideoCapture(0)
+
+while cap.isOpened():
+    success, image = cap.read()
+    if not success:
+        print("Tidak dapat membaca kamera.")
+        break
+
+    # Ubah ke RGB untuk MediaPipe
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    # Deteksi tangan
+    results = hands.process(image_rgb)
+
+    # Kembalikan ke BGR untuk tampilan OpenCV
+    image = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+
+    if results.multi_hand_landmarks:
+        for hand_landmarks, hand_label in zip(results.multi_hand_landmarks, results.multi_handedness):
+            # Label tangan (Left / Right)
+            label = hand_label.classification[0].label
+            score = hand_label.classification[0].score
+
+            # Dapatkan koordinat bounding box
+            h, w, _ = image.shape
+            x_min, x_max, y_min, y_max = w, 0, h, 0
+            for lm in hand_landmarks.landmark:
+                x, y = int(lm.x * w), int(lm.y * h)
+                if x < x_min: x_min = x
+                if x > x_max: x_max = x
+                if y < y_min: y_min = y
+                if y > y_max: y_max = y
+
+            # Gambar bounding box
+            cv2.rectangle(image, (x_min-20, y_min-20), (x_max+20, y_max+20), (0, 255, 0), 2)
+            cv2.putText(image, f'{label} Hand', (x_min-10, y_min-30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+            # Gambar titik 0–20
+            mp_drawing.draw_landmarks(
+                image, hand_landmarks, mp_hands.HAND_CONNECTIONS,
+                mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=2, circle_radius=3),
+                mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2)
+            )
+
+            # Tampilkan index dan koordinat titik
+            for idx, lm in enumerate(hand_landmarks.landmark):
+                x, y = int(lm.x * w), int(lm.y * h)
+                cv2.putText(image, str(idx), (x - 10, y - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+
+    cv2.imshow('Hand Detection with 21 Points', image)
+
+    # Tekan 'q' untuk keluar
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows() 
